@@ -1,0 +1,15 @@
+{
+  "name": "badminton-showdown",
+  "version": "1.0.0",
+  "description": "Badminton tournament management app with real-time updates",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^9.2.2",
+    "csv-parse": "^5.5.2",
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2"
+  }
+}

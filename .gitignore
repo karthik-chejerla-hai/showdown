@@ -1,0 +1,12 @@
+# Dependencies
+node_modules/
+
+# Database (local dev)
+tournament.db
+
+# OS files
+.DS_Store
+
+# Logs
+*.log
+npm-debug.log*
