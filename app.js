@@ -7,14 +7,14 @@ const state = {
     players: [], // Available players from CSV
     teams: {
         A: [
-            { id: 'A1', name: '', players: ['', '', ''] },
-            { id: 'A2', name: '', players: ['', '', ''] },
-            { id: 'A3', name: '', players: ['', '', ''] }
+            { id: 'A1', name: 'Team 1', players: ['', '', ''] },
+            { id: 'A2', name: 'Team 2', players: ['', '', ''] },
+            { id: 'A3', name: 'Team 3', players: ['', '', ''] }
         ],
         B: [
-            { id: 'B1', name: '', players: ['', '', ''] },
-            { id: 'B2', name: '', players: ['', '', ''] },
-            { id: 'B3', name: '', players: ['', '', ''] }
+            { id: 'B1', name: 'Team 4', players: ['', '', ''] },
+            { id: 'B2', name: 'Team 5', players: ['', '', ''] },
+            { id: 'B3', name: 'Team 6', players: ['', '', ''] }
         ]
     },
     matches: [],
@@ -316,13 +316,14 @@ function updatePlayerDropdownOptions() {
     const selectedPlayers = getSelectedPlayers();
     document.querySelectorAll('.player-select').forEach(select => {
         const currentValue = select.value;
-        Array.from(select.options).forEach(option => {
-            if (option.value && option.value !== currentValue) {
-                const isUsed = selectedPlayers.has(option.value);
-                option.disabled = isUsed;
-                option.textContent = option.value + (isUsed ? ' (assigned)' : '');
-            }
-        });
+        // Rebuild options: only show unassigned players + currently selected
+        const availablePlayers = state.players.filter(p => p === currentValue || !selectedPlayers.has(p));
+
+        // Keep the placeholder option, rebuild the rest
+        select.innerHTML = `<option value="">Select player...</option>` +
+            availablePlayers.map(p =>
+                `<option value="${p}" ${p === currentValue ? 'selected' : ''}>${p}</option>`
+            ).join('');
     });
 }
 
@@ -364,11 +365,10 @@ function renderPoolTeams(pool, containerId) {
                                 data-player="${pIndex}"
                                 ${state.scheduleGenerated ? 'disabled' : ''}>
                             <option value="">Select player...</option>
-                            ${state.players.map(p => {
-                                const isSelected = player === p;
-                                const isUsed = selectedPlayers.has(p) && !isSelected;
-                                return `<option value="${p}" ${isSelected ? 'selected' : ''} ${isUsed ? 'disabled' : ''}>${p}${isUsed ? ' (assigned)' : ''}</option>`;
-                            }).join('')}
+                            ${state.players
+                                .filter(p => p === player || !selectedPlayers.has(p))
+                                .map(p => `<option value="${p}" ${player === p ? 'selected' : ''}>${p}</option>`)
+                                .join('')}
                         </select>
                     </div>
                 `).join('')}

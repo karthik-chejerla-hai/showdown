@@ -17,14 +17,14 @@ db.exec(`
 const defaultState = {
     teams: {
         A: [
-            { id: 'A1', name: '', players: ['', '', ''] },
-            { id: 'A2', name: '', players: ['', '', ''] },
-            { id: 'A3', name: '', players: ['', '', ''] }
+            { id: 'A1', name: 'Team 1', players: ['', '', ''] },
+            { id: 'A2', name: 'Team 2', players: ['', '', ''] },
+            { id: 'A3', name: 'Team 3', players: ['', '', ''] }
         ],
         B: [
-            { id: 'B1', name: '', players: ['', '', ''] },
-            { id: 'B2', name: '', players: ['', '', ''] },
-            { id: 'B3', name: '', players: ['', '', ''] }
+            { id: 'B1', name: 'Team 4', players: ['', '', ''] },
+            { id: 'B2', name: 'Team 5', players: ['', '', ''] },
+            { id: 'B3', name: 'Team 6', players: ['', '', ''] }
         ]
     },
     matches: [],
