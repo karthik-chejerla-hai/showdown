@@ -4,6 +4,9 @@ node_modules/
 # Database (local dev)
 tournament.db
 
+# Environment variables
+.env
+
 # OS files
 .DS_Store
 

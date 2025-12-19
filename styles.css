@@ -1566,3 +1566,117 @@ body {
         display: none;
     }
 }
+
+/* ========================================
+   Authentication UI
+   ======================================== */
+.auth-container {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    margin-left: auto;
+    margin-right: var(--spacing-md);
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    color: white;
+}
+
+.user-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-full);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+.user-name {
+    font-size: 0.875rem;
+    font-weight: 500;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.btn-google {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: white;
+    color: var(--gray-700);
+    border-radius: var(--radius-lg);
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all var(--transition-normal);
+    box-shadow: var(--shadow-sm);
+}
+
+.btn-google:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
+}
+
+.google-icon {
+    flex-shrink: 0;
+}
+
+.login-hint {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-md);
+    background: rgba(99, 102, 241, 0.1);
+    border: 1px dashed var(--primary);
+    border-radius: var(--radius-lg);
+    color: var(--primary);
+    font-size: 0.875rem;
+    font-weight: 500;
+    margin-bottom: var(--spacing-lg);
+}
+
+.login-hint-icon {
+    font-size: 1rem;
+}
+
+/* Disabled state for buttons requiring auth */
+.btn.disabled,
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.btn.requires-auth.disabled {
+    position: relative;
+}
+
+/* Input disabled state when not authenticated */
+.team-name-input:disabled,
+.player-select:disabled {
+    background-color: var(--gray-100);
+    cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+    .auth-container {
+        margin-right: 0;
+    }
+
+    .user-name {
+        display: none;
+    }
+
+    .btn-google span:not(.google-icon):not(svg) {
+        display: none;
+    }
+
+    .btn-google {
+        padding: var(--spacing-sm);
+    }
+}

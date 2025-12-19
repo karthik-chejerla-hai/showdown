@@ -23,6 +23,9 @@
                 <a href="#" class="nav-link" data-section="standings">Standings</a>
                 <a href="#" class="nav-link" data-section="knockout">Knockout</a>
             </div>
+            <div class="auth-container" id="auth-container">
+                <!-- Auth UI will be rendered here by JavaScript -->
+            </div>
             <button class="mobile-menu-btn" aria-label="Menu">
                 <span></span>
                 <span></span>
@@ -81,12 +84,17 @@
                     </div>
                 </div>
 
+                <div class="login-hint" id="login-hint" style="display: none;">
+                    <span class="login-hint-icon">🔒</span>
+                    <span>Login with Google to make changes</span>
+                </div>
+
                 <div class="action-buttons">
-                    <button class="btn btn-secondary" id="reset-btn">
+                    <button class="btn btn-secondary requires-auth" id="reset-btn">
                         <span class="btn-icon">🔄</span>
                         Reset All
                     </button>
-                    <button class="btn btn-primary" id="generate-btn">
+                    <button class="btn btn-primary requires-auth" id="generate-btn">
                         <span class="btn-icon">🚀</span>
                         Generate Schedule
                     </button>
