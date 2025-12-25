@@ -44,12 +44,20 @@ passport.deserializeUser((user: Express.User, done) => {
     done(null, user);
 });
 
-// Middleware to check if user is authenticated
+// Middleware to check if user is authenticated (for API routes)
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
     if (req.isAuthenticated()) {
         return next();
     }
     res.status(401).json({ error: 'Login required' });
+}
+
+// Middleware to redirect unauthenticated users to login page (for HTML page routes)
+export function requireAuthRedirect(req: Request, res: Response, next: NextFunction): void {
+    if (req.isAuthenticated()) {
+        return next();
+    }
+    res.redirect('/login');
 }
 
 // Check if auth is configured
