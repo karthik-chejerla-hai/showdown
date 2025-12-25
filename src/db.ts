@@ -1,7 +1,22 @@
+import { createClient } from '@libsql/client';
 import { TournamentState, Match, KnockoutMatch } from './types';
 
-// In-memory storage (temporary - for debugging deployment issues)
-let tournamentState: TournamentState | null = null;
+// Initialize Turso client
+const db = createClient({
+    url: process.env.TURSO_DATABASE_URL || 'file:tournament.db',
+    authToken: process.env.TURSO_AUTH_TOKEN,
+});
+
+// Initialize database schema
+export async function initDatabase(): Promise<void> {
+    await db.execute(`
+        CREATE TABLE IF NOT EXISTS tournament (
+            id INTEGER PRIMARY KEY DEFAULT 1,
+            state TEXT NOT NULL,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+}
 
 // Default tournament state (matches the frontend structure)
 export const defaultState: TournamentState = {
@@ -27,25 +42,43 @@ export const defaultState: TournamentState = {
 };
 
 // Get tournament state
-export function getTournament(): TournamentState {
-    return tournamentState || defaultState;
+export async function getTournament(): Promise<TournamentState> {
+    const result = await db.execute('SELECT state FROM tournament WHERE id = 1');
+    if (result.rows.length > 0) {
+        return JSON.parse(result.rows[0].state as string) as TournamentState;
+    }
+    return defaultState;
 }
 
 // Save tournament state
-export function saveTournament(state: TournamentState): TournamentState {
-    tournamentState = JSON.parse(JSON.stringify(state));
+export async function saveTournament(state: TournamentState): Promise<TournamentState> {
+    const stateJson = JSON.stringify(state);
+    const existing = await db.execute('SELECT id FROM tournament WHERE id = 1');
+
+    if (existing.rows.length > 0) {
+        await db.execute({
+            sql: 'UPDATE tournament SET state = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1',
+            args: [stateJson]
+        });
+    } else {
+        await db.execute({
+            sql: 'INSERT INTO tournament (id, state) VALUES (1, ?)',
+            args: [stateJson]
+        });
+    }
+
     return getTournament();
 }
 
 // Reset tournament to default state
-export function resetTournament(): TournamentState {
-    tournamentState = null;
+export async function resetTournament(): Promise<TournamentState> {
+    await db.execute('DELETE FROM tournament WHERE id = 1');
     return defaultState;
 }
 
 // Update a specific group match
-export function updateMatch(matchId: string, matchData: Partial<Match>): TournamentState {
-    const state = getTournament();
+export async function updateMatch(matchId: string, matchData: Partial<Match>): Promise<TournamentState> {
+    const state = await getTournament();
     const matchIndex = state.matches.findIndex(m => m.id === matchId);
 
     if (matchIndex === -1) {
@@ -57,8 +90,8 @@ export function updateMatch(matchId: string, matchData: Partial<Match>): Tournam
 }
 
 // Update a knockout match
-export function updateKnockoutMatch(matchKey: keyof TournamentState['knockoutMatches'], matchData: Partial<KnockoutMatch>): TournamentState {
-    const state = getTournament();
+export async function updateKnockoutMatch(matchKey: keyof TournamentState['knockoutMatches'], matchData: Partial<KnockoutMatch>): Promise<TournamentState> {
+    const state = await getTournament();
 
     if (!state.knockoutMatches[matchKey]) {
         throw new Error(`Knockout match ${matchKey} not found`);

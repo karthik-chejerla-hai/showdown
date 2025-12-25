@@ -128,9 +128,9 @@ function requireAuthIfConfigured(req: Request, res: Response, next: NextFunction
 // ========================================
 
 // Get tournament state
-app.get('/api/tournament', (req: Request, res: Response) => {
+app.get('/api/tournament', async (req: Request, res: Response) => {
     try {
-        const state = db.getTournament();
+        const state = await db.getTournament();
         res.json(state);
     } catch (err) {
         res.status(500).json({ error: (err as Error).message });
@@ -138,9 +138,9 @@ app.get('/api/tournament', (req: Request, res: Response) => {
 });
 
 // Create/Update tournament (teams, generate schedule) - PROTECTED
-app.post('/api/tournament', requireAuthIfConfigured, (req: Request, res: Response) => {
+app.post('/api/tournament', requireAuthIfConfigured, async (req: Request, res: Response) => {
     try {
-        const state = db.saveTournament(req.body as TournamentState);
+        const state = await db.saveTournament(req.body as TournamentState);
         // Broadcast to all connected clients
         io.emit('tournament:updated', state);
         res.json(state);
@@ -150,10 +150,10 @@ app.post('/api/tournament', requireAuthIfConfigured, (req: Request, res: Respons
 });
 
 // Update a group match score - PROTECTED
-app.put('/api/match/:id', requireAuthIfConfigured, (req: Request, res: Response) => {
+app.put('/api/match/:id', requireAuthIfConfigured, async (req: Request, res: Response) => {
     try {
         const matchId = req.params.id;
-        const state = db.updateMatch(matchId, req.body);
+        const state = await db.updateMatch(matchId, req.body);
         // Broadcast to all connected clients
         io.emit('tournament:updated', state);
         res.json(state);
@@ -163,10 +163,10 @@ app.put('/api/match/:id', requireAuthIfConfigured, (req: Request, res: Response)
 });
 
 // Update a knockout match score - PROTECTED
-app.put('/api/knockout/:key', requireAuthIfConfigured, (req: Request, res: Response) => {
+app.put('/api/knockout/:key', requireAuthIfConfigured, async (req: Request, res: Response) => {
     try {
         const matchKey = req.params.key as keyof TournamentState['knockoutMatches'];
-        const state = db.updateKnockoutMatch(matchKey, req.body);
+        const state = await db.updateKnockoutMatch(matchKey, req.body);
         // Broadcast to all connected clients
         io.emit('tournament:updated', state);
         res.json(state);
@@ -176,9 +176,9 @@ app.put('/api/knockout/:key', requireAuthIfConfigured, (req: Request, res: Respo
 });
 
 // Reset tournament - PROTECTED
-app.delete('/api/tournament', requireAuthIfConfigured, (req: Request, res: Response) => {
+app.delete('/api/tournament', requireAuthIfConfigured, async (req: Request, res: Response) => {
     try {
-        const state = db.resetTournament();
+        const state = await db.resetTournament();
         // Broadcast to all connected clients
         io.emit('tournament:updated', state);
         res.json(state);
@@ -190,11 +190,12 @@ app.delete('/api/tournament', requireAuthIfConfigured, (req: Request, res: Respo
 // ========================================
 // WebSocket Events
 // ========================================
-io.on('connection', (socket) => {
+io.on('connection', async (socket) => {
     console.log('Client connected:', socket.id);
 
     // Send current state to newly connected client
-    socket.emit('tournament:updated', db.getTournament());
+    const state = await db.getTournament();
+    socket.emit('tournament:updated', state);
 
     socket.on('disconnect', () => {
         console.log('Client disconnected:', socket.id);
@@ -204,13 +205,24 @@ io.on('connection', (socket) => {
 // ========================================
 // Start Server
 // ========================================
-httpServer.listen(PORT, () => {
-    console.log(`
+async function startServer() {
+    // Initialize database
+    await db.initDatabase();
+    console.log('Database initialized');
+
+    httpServer.listen(PORT, () => {
+        console.log(`
 ╔════════════════════════════════════════╗
 ║     🏸 Badminton Showdown Server 🏸     ║
 ╠════════════════════════════════════════╣
 ║  Server running at:                    ║
 ║  http://localhost:${PORT}                  ║
 ╚════════════════════════════════════════╝
-    `);
+        `);
+    });
+}
+
+startServer().catch(err => {
+    console.error('Failed to start server:', err);
+    process.exit(1);
 });
