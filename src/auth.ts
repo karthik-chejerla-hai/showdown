@@ -5,6 +5,7 @@ import { User } from './types';
 
 // Extend Express Request to include user
 declare global {
+    // eslint-disable-next-line @typescript-eslint/no-namespace
     namespace Express {
         interface User {
             id: string;

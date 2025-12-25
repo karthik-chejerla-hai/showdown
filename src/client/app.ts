@@ -124,7 +124,6 @@ const state: AppState = {
 
 // Socket.io connection
 let socket: Socket | null = null;
-let isConnected = false;
 
 // Flag to track pending saves (prevents double render from own WebSocket echo)
 let pendingSave = false;
@@ -331,13 +330,11 @@ function connectSocket(): void {
     socket = io();
 
     socket.on('connect', () => {
-        isConnected = true;
         updateConnectionStatus('connected');
         console.log('Connected to server');
     });
 
     socket.on('disconnect', () => {
-        isConnected = false;
         updateConnectionStatus('disconnected');
         console.log('Disconnected from server');
     });
@@ -382,7 +379,7 @@ async function loadPlayers(): Promise<void> {
     }
 }
 
-async function fetchTournament(): Promise<void> {
+async function _fetchTournament(): Promise<void> {
     try {
         const response = await fetch('/api/tournament');
         const data: TournamentState = await response.json();
@@ -451,7 +448,7 @@ async function updateMatchOnServer(matchId: string, matchData: Match): Promise<T
     }
 }
 
-async function updateKnockoutOnServer(matchKey: string, matchData: KnockoutMatch): Promise<TournamentState> {
+async function _updateKnockoutOnServer(matchKey: string, matchData: KnockoutMatch): Promise<TournamentState> {
     try {
         const response = await fetch(`/api/knockout/${matchKey}`, {
             method: 'PUT',
@@ -893,7 +890,7 @@ function isGameWinner(score1: number, score2: number): boolean {
     return false;
 }
 
-function renderGameRow(game: Game, index: number, match: Match): string {
+function renderGameRow(game: Game, _index: number, _match: Match): string {
     const hasScore = game.team1Score !== null && game.team2Score !== null;
 
     // Use proper badminton win detection
