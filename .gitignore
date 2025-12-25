@@ -4,9 +4,17 @@ node_modules/
 # Database (local dev)
 tournament.db
 
+# Environment variables
+.env
+
 # OS files
 .DS_Store
 
 # Logs
 *.log
 npm-debug.log*
+
+# TypeScript build output
+dist/
+public/app.js
+public/app.js.map

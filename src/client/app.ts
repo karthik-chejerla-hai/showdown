@@ -2,8 +2,102 @@
 // Badminton Tournament App
 // ========================================
 
+// Declare Socket.io types (loaded from CDN)
+declare const io: () => Socket;
+
+interface Socket {
+    on(event: string, callback: (data?: unknown) => void): void;
+    emit(event: string, data?: unknown): void;
+    id: string;
+}
+
+// Type definitions
+interface Team {
+    id: string;
+    name: string;
+    players: string[];
+}
+
+interface Teams {
+    A: Team[];
+    B: Team[];
+}
+
+interface Game {
+    id: number;
+    team1Players: string[];
+    team2Players: string[];
+    team1Score: number | null;
+    team2Score: number | null;
+    winner: 'team1' | 'team2' | null;
+}
+
+interface Match {
+    id: string;
+    pool: 'A' | 'B';
+    team1Id: string;
+    team2Id: string;
+    team1Name: string;
+    team2Name: string;
+    games: Game[];
+    team1GamesWon: number;
+    team2GamesWon: number;
+    winner: string | null;
+    completed: boolean;
+}
+
+interface KnockoutMatch {
+    id: string;
+    seed1: string;
+    seed2: string;
+    team1: Team | null;
+    team2: Team | null;
+    games: Game[];
+    team1GamesWon: number;
+    team2GamesWon: number;
+    winner: string | null;
+    completed: boolean;
+}
+
+interface KnockoutMatches {
+    semi1: KnockoutMatch | null;
+    semi2: KnockoutMatch | null;
+    final: KnockoutMatch | null;
+}
+
+interface User {
+    id: string;
+    name: string;
+    email?: string;
+    photo?: string;
+}
+
+interface TournamentState {
+    teams: Teams;
+    matches: Match[];
+    knockoutMatches: KnockoutMatches;
+    scheduleGenerated: boolean;
+}
+
+interface AppState extends TournamentState {
+    players: string[];
+    currentUser: User | null;
+    authConfigured: boolean;
+}
+
+interface Standing {
+    id: string;
+    name: string;
+    played: number;
+    matchesWon: number;
+    matchesLost: number;
+    gamesWon: number;
+    gamesLost: number;
+    points: number;
+}
+
 // State Management
-const state = {
+const state: AppState = {
     players: [], // Available players from CSV
     teams: {
         A: [
@@ -23,12 +117,13 @@ const state = {
         semi2: null,
         final: null
     },
-    scheduleGenerated: false
+    scheduleGenerated: false,
+    currentUser: null,
+    authConfigured: false
 };
 
 // Socket.io connection
-let socket = null;
-let isConnected = false;
+let socket: Socket | null = null;
 
 // Flag to track pending saves (prevents double render from own WebSocket echo)
 let pendingSave = false;
@@ -37,23 +132,26 @@ let pendingSave = false;
 const sections = document.querySelectorAll('.section');
 const navLinks = document.querySelectorAll('.nav-link');
 const mobileNavLinks = document.querySelectorAll('.mobile-nav-link');
-const scoreModal = document.getElementById('score-modal');
-const modalClose = document.getElementById('modal-close');
-const modalCancel = document.getElementById('modal-cancel');
-const modalSave = document.getElementById('modal-save');
+const scoreModal = document.getElementById('score-modal') as HTMLDivElement;
+const modalClose = document.getElementById('modal-close') as HTMLButtonElement;
+const modalCancel = document.getElementById('modal-cancel') as HTMLButtonElement;
+const modalSave = document.getElementById('modal-save') as HTMLButtonElement;
 
 // Current match being edited
-let currentEditMatch = null;
-let currentEditType = null; // 'group' or 'knockout'
+let currentEditMatch: Match | KnockoutMatch | null = null;
+let currentEditType: 'group' | 'knockout' | null = null;
 
 // ========================================
 // Initialize App
 // ========================================
-async function init() {
+async function init(): Promise<void> {
     createToastContainer();
     addConnectionIndicator();
     setupNavigation();
     setupEventListeners();
+
+    // Check auth status first
+    await checkAuthStatus();
 
     // Load players from server
     await loadPlayers();
@@ -63,18 +161,110 @@ async function init() {
 }
 
 // ========================================
+// Authentication
+// ========================================
+async function checkAuthStatus(): Promise<void> {
+    try {
+        // Check if auth is configured
+        const statusRes = await fetch('/auth/status');
+        const { configured } = await statusRes.json();
+        state.authConfigured = configured;
+
+        // Get current user if auth is configured
+        if (configured) {
+            const userRes = await fetch('/auth/user');
+            state.currentUser = await userRes.json();
+        }
+
+        renderAuthUI();
+    } catch (err) {
+        console.error('Failed to check auth status:', err);
+    }
+}
+
+function renderAuthUI(): void {
+    const authContainer = document.getElementById('auth-container');
+    if (!authContainer) return;
+
+    if (!state.authConfigured) {
+        // Auth not configured, hide the auth container
+        authContainer.style.display = 'none';
+        return;
+    }
+
+    authContainer.style.display = 'flex';
+
+    if (state.currentUser) {
+        authContainer.innerHTML = `
+            <div class="user-info">
+                ${state.currentUser.photo ? `<img src="${state.currentUser.photo}" alt="${state.currentUser.name}" class="user-avatar">` : ''}
+                <span class="user-name">${state.currentUser.name}</span>
+            </div>
+            <a href="/auth/logout" class="btn btn-secondary btn-sm">Logout</a>
+        `;
+    } else {
+        authContainer.innerHTML = `
+            <a href="/auth/google" class="btn btn-google">
+                <svg class="google-icon" viewBox="0 0 24 24" width="18" height="18">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+                Sign in with Google
+            </a>
+        `;
+    }
+
+    updateEditPermissions();
+}
+
+function canEdit(): boolean {
+    // If auth is not configured, everyone can edit
+    if (!state.authConfigured) return true;
+    // If auth is configured, only logged-in users can edit
+    return !!state.currentUser;
+}
+
+function updateEditPermissions(): void {
+    const canEditNow = canEdit();
+
+    // Update buttons
+    document.querySelectorAll('.requires-auth').forEach(el => {
+        const element = el as HTMLButtonElement;
+        if (canEditNow) {
+            element.disabled = false;
+            element.classList.remove('disabled');
+            element.title = '';
+        } else {
+            element.disabled = true;
+            element.classList.add('disabled');
+            element.title = 'Login required to edit';
+        }
+    });
+
+    // Show login hint if needed
+    const loginHint = document.getElementById('login-hint');
+    if (loginHint) {
+        loginHint.style.display = (state.authConfigured && !state.currentUser) ? 'block' : 'none';
+    }
+}
+
+// ========================================
 // Toast Notifications
 // ========================================
-function createToastContainer() {
+function createToastContainer(): void {
     const container = document.createElement('div');
     container.className = 'toast-container';
     container.id = 'toast-container';
     document.body.appendChild(container);
 }
 
-function showToast(message, type = 'info') {
+function showToast(message: string, type: 'success' | 'error' | 'info' = 'info'): void {
     const container = document.getElementById('toast-container');
-    const icons = {
+    if (!container) return;
+
+    const icons: Record<string, string> = {
         success: '✅',
         error: '❌',
         info: 'ℹ️'
@@ -100,8 +290,10 @@ function showToast(message, type = 'info') {
 // ========================================
 // Connection Status Indicator
 // ========================================
-function addConnectionIndicator() {
+function addConnectionIndicator(): void {
     const navbar = document.querySelector('.navbar');
+    if (!navbar) return;
+
     const indicator = document.createElement('div');
     indicator.className = 'connection-status connecting';
     indicator.id = 'connection-status';
@@ -109,15 +301,18 @@ function addConnectionIndicator() {
         <span class="connection-dot"></span>
         <span>Connecting...</span>
     `;
-    navbar.insertBefore(indicator, navbar.querySelector('.mobile-menu-btn'));
+    const mobileMenuBtn = navbar.querySelector('.mobile-menu-btn');
+    if (mobileMenuBtn) {
+        navbar.insertBefore(indicator, mobileMenuBtn);
+    }
 }
 
-function updateConnectionStatus(status) {
+function updateConnectionStatus(status: 'connected' | 'disconnected' | 'connecting'): void {
     const indicator = document.getElementById('connection-status');
     if (!indicator) return;
 
     indicator.className = `connection-status ${status}`;
-    const text = {
+    const text: Record<string, string> = {
         connected: 'Live',
         disconnected: 'Offline',
         connecting: 'Connecting...'
@@ -131,22 +326,21 @@ function updateConnectionStatus(status) {
 // ========================================
 // Socket.io Connection
 // ========================================
-function connectSocket() {
+function connectSocket(): void {
     socket = io();
 
     socket.on('connect', () => {
-        isConnected = true;
         updateConnectionStatus('connected');
         console.log('Connected to server');
     });
 
     socket.on('disconnect', () => {
-        isConnected = false;
         updateConnectionStatus('disconnected');
         console.log('Disconnected from server');
     });
 
-    socket.on('tournament:updated', (newState) => {
+    socket.on('tournament:updated', (data: unknown) => {
+        const newState = data as TournamentState;
         console.log('Received tournament update');
         // Update local state
         state.teams = newState.teams;
@@ -173,7 +367,7 @@ function connectSocket() {
 // ========================================
 // API Helpers
 // ========================================
-async function loadPlayers() {
+async function loadPlayers(): Promise<void> {
     try {
         const response = await fetch('/api/players');
         state.players = await response.json();
@@ -185,10 +379,10 @@ async function loadPlayers() {
     }
 }
 
-async function fetchTournament() {
+async function _fetchTournament(): Promise<void> {
     try {
         const response = await fetch('/api/tournament');
-        const data = await response.json();
+        const data: TournamentState = await response.json();
         Object.assign(state, {
             teams: data.teams,
             matches: data.matches,
@@ -207,7 +401,7 @@ async function fetchTournament() {
     }
 }
 
-async function saveTournament() {
+async function saveTournament(): Promise<TournamentState> {
     try {
         const response = await fetch('/api/tournament', {
             method: 'POST',
@@ -219,51 +413,75 @@ async function saveTournament() {
                 scheduleGenerated: state.scheduleGenerated
             })
         });
+        if (response.status === 401) {
+            showToast('Please login to make changes', 'error');
+            throw new Error('Unauthorized');
+        }
         return await response.json();
     } catch (err) {
         console.error('Failed to save tournament:', err);
-        showToast('Failed to save changes', 'error');
+        if ((err as Error).message !== 'Unauthorized') {
+            showToast('Failed to save changes', 'error');
+        }
         throw err;
     }
 }
 
-async function updateMatchOnServer(matchId, matchData) {
+async function updateMatchOnServer(matchId: string, matchData: Match): Promise<TournamentState> {
     try {
         const response = await fetch(`/api/match/${encodeURIComponent(matchId)}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(matchData)
         });
+        if (response.status === 401) {
+            showToast('Please login to make changes', 'error');
+            throw new Error('Unauthorized');
+        }
         return await response.json();
     } catch (err) {
         console.error('Failed to update match:', err);
-        showToast('Failed to save score', 'error');
+        if ((err as Error).message !== 'Unauthorized') {
+            showToast('Failed to save score', 'error');
+        }
         throw err;
     }
 }
 
-async function updateKnockoutOnServer(matchKey, matchData) {
+async function _updateKnockoutOnServer(matchKey: string, matchData: KnockoutMatch): Promise<TournamentState> {
     try {
         const response = await fetch(`/api/knockout/${matchKey}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(matchData)
         });
+        if (response.status === 401) {
+            showToast('Please login to make changes', 'error');
+            throw new Error('Unauthorized');
+        }
         return await response.json();
     } catch (err) {
         console.error('Failed to update knockout match:', err);
-        showToast('Failed to save score', 'error');
+        if ((err as Error).message !== 'Unauthorized') {
+            showToast('Failed to save score', 'error');
+        }
         throw err;
     }
 }
 
-async function resetTournamentOnServer() {
+async function resetTournamentOnServer(): Promise<TournamentState> {
     try {
         const response = await fetch('/api/tournament', { method: 'DELETE' });
+        if (response.status === 401) {
+            showToast('Please login to make changes', 'error');
+            throw new Error('Unauthorized');
+        }
         return await response.json();
     } catch (err) {
         console.error('Failed to reset tournament:', err);
-        showToast('Failed to reset tournament', 'error');
+        if ((err as Error).message !== 'Unauthorized') {
+            showToast('Failed to reset tournament', 'error');
+        }
         throw err;
     }
 }
@@ -271,37 +489,42 @@ async function resetTournamentOnServer() {
 // ========================================
 // Navigation
 // ========================================
-function setupNavigation() {
+function setupNavigation(): void {
     [...navLinks, ...mobileNavLinks].forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
-            const sectionId = link.dataset.section;
-            showSection(sectionId);
+            const sectionId = (link as HTMLElement).dataset.section;
+            if (sectionId) {
+                showSection(sectionId);
+            }
         });
     });
 }
 
-function showSection(sectionId) {
+function showSection(sectionId: string): void {
     sections.forEach(section => {
         section.classList.remove('active');
     });
-    document.getElementById(sectionId).classList.add('active');
+    const targetSection = document.getElementById(sectionId);
+    if (targetSection) {
+        targetSection.classList.add('active');
+    }
 
     navLinks.forEach(link => {
-        link.classList.toggle('active', link.dataset.section === sectionId);
+        link.classList.toggle('active', (link as HTMLElement).dataset.section === sectionId);
     });
 
     mobileNavLinks.forEach(link => {
-        link.classList.toggle('active', link.dataset.section === sectionId);
+        link.classList.toggle('active', (link as HTMLElement).dataset.section === sectionId);
     });
 }
 
 // ========================================
 // Get Selected Players (for validation)
 // ========================================
-function getSelectedPlayers() {
-    const selected = new Set();
-    ['A', 'B'].forEach(pool => {
+function getSelectedPlayers(): Set<string> {
+    const selected = new Set<string>();
+    (['A', 'B'] as const).forEach(pool => {
         state.teams[pool].forEach(team => {
             team.players.forEach(player => {
                 if (player) selected.add(player);
@@ -312,15 +535,16 @@ function getSelectedPlayers() {
 }
 
 // Update dropdown options in-place without full re-render
-function updatePlayerDropdownOptions() {
+function updatePlayerDropdownOptions(): void {
     const selectedPlayers = getSelectedPlayers();
     document.querySelectorAll('.player-select').forEach(select => {
-        const currentValue = select.value;
+        const selectEl = select as HTMLSelectElement;
+        const currentValue = selectEl.value;
         // Rebuild options: only show unassigned players + currently selected
         const availablePlayers = state.players.filter(p => p === currentValue || !selectedPlayers.has(p));
 
         // Keep the placeholder option, rebuild the rest
-        select.innerHTML = `<option value="">Select player...</option>` +
+        selectEl.innerHTML = `<option value="">Select player...</option>` +
             availablePlayers.map(p =>
                 `<option value="${p}" ${p === currentValue ? 'selected' : ''}>${p}</option>`
             ).join('');
@@ -330,15 +554,18 @@ function updatePlayerDropdownOptions() {
 // ========================================
 // Team Forms with Dropdowns
 // ========================================
-function renderTeamForms() {
+function renderTeamForms(): void {
     renderPoolTeams('A', 'pool-a-teams');
     renderPoolTeams('B', 'pool-b-teams');
 }
 
-function renderPoolTeams(pool, containerId) {
+function renderPoolTeams(pool: 'A' | 'B', containerId: string): void {
     const container = document.getElementById(containerId);
+    if (!container) return;
+
     const teams = state.teams[pool];
     const selectedPlayers = getSelectedPlayers();
+    const isDisabled = state.scheduleGenerated || !canEdit();
 
     container.innerHTML = teams.map((team, index) => `
         <div class="team-card" data-team="${team.id}">
@@ -352,7 +579,7 @@ function renderPoolTeams(pool, containerId) {
                            data-pool="${pool}"
                            data-index="${index}"
                            data-field="name"
-                           ${state.scheduleGenerated ? 'disabled' : ''}>
+                           ${isDisabled ? 'disabled' : ''}>
                 </div>
             </div>
             <div class="players-list">
@@ -363,7 +590,7 @@ function renderPoolTeams(pool, containerId) {
                                 data-pool="${pool}"
                                 data-index="${index}"
                                 data-player="${pIndex}"
-                                ${state.scheduleGenerated ? 'disabled' : ''}>
+                                ${isDisabled ? 'disabled' : ''}>
                             <option value="">Select player...</option>
                             ${state.players
                                 .filter(p => p === player || !selectedPlayers.has(p))
@@ -380,12 +607,15 @@ function renderPoolTeams(pool, containerId) {
 // ========================================
 // Event Listeners
 // ========================================
-function setupEventListeners() {
+function setupEventListeners(): void {
     // Team name input changes
     document.addEventListener('input', (e) => {
-        if (e.target.classList.contains('team-name-input')) {
-            const { pool, index } = e.target.dataset;
-            state.teams[pool][index].name = e.target.value;
+        const target = e.target as HTMLElement;
+        if (target.classList.contains('team-name-input')) {
+            const input = target as HTMLInputElement;
+            const pool = input.dataset.pool as 'A' | 'B';
+            const index = parseInt(input.dataset.index || '0', 10);
+            state.teams[pool][index].name = input.value;
             // Debounced save
             debouncedSave();
         }
@@ -393,15 +623,19 @@ function setupEventListeners() {
 
     // Player select changes
     document.addEventListener('change', (e) => {
-        if (e.target.classList.contains('player-select')) {
-            const { pool, index, player } = e.target.dataset;
-            state.teams[pool][index].players[player] = e.target.value;
+        const target = e.target as HTMLElement;
+        if (target.classList.contains('player-select')) {
+            const select = target as HTMLSelectElement;
+            const pool = select.dataset.pool as 'A' | 'B';
+            const index = parseInt(select.dataset.index || '0', 10);
+            const playerIndex = parseInt(select.dataset.player || '0', 10);
+            state.teams[pool][index].players[playerIndex] = select.value;
 
             // Update visual state
-            if (e.target.value) {
-                e.target.classList.add('selected');
+            if (select.value) {
+                select.classList.add('selected');
             } else {
-                e.target.classList.remove('selected');
+                select.classList.remove('selected');
             }
 
             // Update other dropdowns' disabled options (without full re-render)
@@ -413,17 +647,23 @@ function setupEventListeners() {
     });
 
     // Generate schedule button
-    document.getElementById('generate-btn').addEventListener('click', generateSchedule);
+    const generateBtn = document.getElementById('generate-btn');
+    if (generateBtn) {
+        generateBtn.addEventListener('click', generateSchedule);
+    }
 
     // Reset button
-    document.getElementById('reset-btn').addEventListener('click', resetTournament);
+    const resetBtn = document.getElementById('reset-btn');
+    if (resetBtn) {
+        resetBtn.addEventListener('click', resetTournament);
+    }
 
     // Schedule tabs
     document.querySelectorAll('.schedule-tab').forEach(tab => {
         tab.addEventListener('click', () => {
             document.querySelectorAll('.schedule-tab').forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
-            filterMatches(tab.dataset.pool);
+            filterMatches((tab as HTMLElement).dataset.pool || 'all');
         });
     });
 
@@ -444,8 +684,8 @@ function setupEventListeners() {
 }
 
 // Debounce helper
-let saveTimeout = null;
-function debouncedSave() {
+let saveTimeout: ReturnType<typeof setTimeout> | null = null;
+function debouncedSave(): void {
     if (saveTimeout) clearTimeout(saveTimeout);
     saveTimeout = setTimeout(async () => {
         pendingSave = true;
@@ -458,7 +698,7 @@ function debouncedSave() {
 // ========================================
 // Schedule Generation
 // ========================================
-async function generateSchedule() {
+async function generateSchedule(): Promise<void> {
     // Validate all teams have names and players
     const allTeams = [...state.teams.A, ...state.teams.B];
 
@@ -505,7 +745,7 @@ async function generateSchedule() {
         await saveTournament();
         showToast('Schedule generated successfully!', 'success');
         showSection('schedule');
-    } catch (err) {
+    } catch {
         // Revert on error
         state.matches = [];
         state.knockoutMatches = { semi1: null, semi2: null, final: null };
@@ -513,9 +753,9 @@ async function generateSchedule() {
     }
 }
 
-function generatePoolMatches(pool) {
+function generatePoolMatches(pool: 'A' | 'B'): void {
     const teams = state.teams[pool];
-    const matchups = [
+    const matchups: [number, number][] = [
         [0, 1],
         [0, 2],
         [1, 2]
@@ -534,7 +774,7 @@ function generatePoolMatches(pool) {
             { team1Pair: [1, 2], team2Pair: [1, 2] }
         ];
 
-        const match = {
+        const match: Match = {
             id: `${pool}-${team1.id}-${team2.id}`,
             pool,
             team1Id: team1.id,
@@ -559,7 +799,7 @@ function generatePoolMatches(pool) {
     });
 }
 
-function createKnockoutMatch(id, seed1, seed2) {
+function createKnockoutMatch(id: string, seed1: string, seed2: string): KnockoutMatch {
     return {
         id,
         seed1,
@@ -577,8 +817,9 @@ function createKnockoutMatch(id, seed1, seed2) {
 // ========================================
 // Schedule Rendering
 // ========================================
-function renderSchedule() {
+function renderSchedule(): void {
     const container = document.getElementById('matches-container');
+    if (!container) return;
 
     if (!state.scheduleGenerated || state.matches.length === 0) {
         container.innerHTML = `
@@ -593,7 +834,7 @@ function renderSchedule() {
     container.innerHTML = state.matches.map((match, index) => renderMatchCard(match, index)).join('');
 }
 
-function renderMatchCard(match, index) {
+function renderMatchCard(match: Match, index: number): string {
     const team1Class = match.winner === match.team1Id ? 'winner' : '';
     const team2Class = match.winner === match.team2Id ? 'winner' : '';
 
@@ -638,7 +879,7 @@ function renderMatchCard(match, index) {
 // - First to 21 wins
 // - At 20-20 deuce: need 2-point lead
 // - Cap at 30: at 29-29, first to 30 wins
-function isGameWinner(score1, score2) {
+function isGameWinner(score1: number, score2: number): boolean {
     if (score1 <= score2) return false;
     // Cap at 30: if score1 reaches 30, they win
     if (score1 === 30) return true;
@@ -649,15 +890,15 @@ function isGameWinner(score1, score2) {
     return false;
 }
 
-function renderGameRow(game, index, match) {
+function renderGameRow(game: Game, _index: number, _match: Match): string {
     const hasScore = game.team1Score !== null && game.team2Score !== null;
 
     // Use proper badminton win detection
     let team1Won = false;
     let team2Won = false;
     if (hasScore) {
-        team1Won = isGameWinner(game.team1Score, game.team2Score);
-        team2Won = isGameWinner(game.team2Score, game.team1Score);
+        team1Won = isGameWinner(game.team1Score!, game.team2Score!);
+        team2Won = isGameWinner(game.team2Score!, game.team1Score!);
     }
 
     return `
@@ -678,13 +919,14 @@ function renderGameRow(game, index, match) {
     `;
 }
 
-function filterMatches(pool) {
+function filterMatches(pool: string): void {
     const cards = document.querySelectorAll('.match-card');
     cards.forEach(card => {
-        if (pool === 'all' || card.dataset.pool === pool) {
-            card.style.display = 'block';
+        const cardEl = card as HTMLElement;
+        if (pool === 'all' || cardEl.dataset.pool === pool) {
+            cardEl.style.display = 'block';
         } else {
-            card.style.display = 'none';
+            cardEl.style.display = 'none';
         }
     });
 }
@@ -692,53 +934,68 @@ function filterMatches(pool) {
 // ========================================
 // Score Modal
 // ========================================
-function openScoreModal(matchId) {
+function openScoreModal(matchId: string): void {
+    if (!canEdit()) {
+        showToast('Please login to enter scores', 'info');
+        return;
+    }
+
     const match = state.matches.find(m => m.id === matchId);
     if (!match) return;
 
     currentEditMatch = match;
     currentEditType = 'group';
 
-    document.getElementById('modal-title').textContent = `${match.team1Name} vs ${match.team2Name}`;
+    const modalTitle = document.getElementById('modal-title');
+    if (modalTitle) {
+        modalTitle.textContent = `${match.team1Name} vs ${match.team2Name}`;
+    }
 
     const modalBody = document.getElementById('modal-body');
-    modalBody.innerHTML = match.games.map((game, index) => `
-        <div class="score-input-group">
-            <div class="score-input-header">
-                <h3>Game ${index + 1}</h3>
-            </div>
-            <div class="score-pair">
-                <div class="score-pair-players">
-                    <div>${game.team1Players.join(' & ')}</div>
-                    <div class="score-pair-vs">vs</div>
-                    <div>${game.team2Players.join(' & ')}</div>
+    if (modalBody) {
+        modalBody.innerHTML = match.games.map((game, index) => `
+            <div class="score-input-group">
+                <div class="score-input-header">
+                    <h3>Game ${index + 1}</h3>
                 </div>
-                <div class="score-inputs">
-                    <input type="number"
-                           class="score-input"
-                           id="game-${index}-score1"
-                           min="0"
-                           max="30"
-                           value="${game.team1Score !== null ? game.team1Score : ''}"
-                           placeholder="0">
-                    <span class="score-separator">-</span>
-                    <input type="number"
-                           class="score-input"
-                           id="game-${index}-score2"
-                           min="0"
-                           max="30"
-                           value="${game.team2Score !== null ? game.team2Score : ''}"
-                           placeholder="0">
+                <div class="score-pair">
+                    <div class="score-pair-players">
+                        <div>${game.team1Players.join(' & ')}</div>
+                        <div class="score-pair-vs">vs</div>
+                        <div>${game.team2Players.join(' & ')}</div>
+                    </div>
+                    <div class="score-inputs">
+                        <input type="number"
+                               class="score-input"
+                               id="game-${index}-score1"
+                               min="0"
+                               max="30"
+                               value="${game.team1Score !== null ? game.team1Score : ''}"
+                               placeholder="0">
+                        <span class="score-separator">-</span>
+                        <input type="number"
+                               class="score-input"
+                               id="game-${index}-score2"
+                               min="0"
+                               max="30"
+                               value="${game.team2Score !== null ? game.team2Score : ''}"
+                               placeholder="0">
+                    </div>
                 </div>
             </div>
-        </div>
-    `).join('');
+        `).join('');
+    }
 
     scoreModal.classList.add('active');
 }
 
-function openKnockoutScoreModal(matchKey) {
-    const match = state.knockoutMatches[matchKey];
+function openKnockoutScoreModal(matchKey: string): void {
+    if (!canEdit()) {
+        showToast('Please login to enter scores', 'info');
+        return;
+    }
+
+    const match = state.knockoutMatches[matchKey as keyof KnockoutMatches];
     if (!match || !match.team1 || !match.team2) {
         showToast('Teams have not been determined yet', 'info');
         return;
@@ -747,7 +1004,10 @@ function openKnockoutScoreModal(matchKey) {
     currentEditMatch = match;
     currentEditType = 'knockout';
 
-    document.getElementById('modal-title').textContent = `${match.team1.name} vs ${match.team2.name}`;
+    const modalTitle = document.getElementById('modal-title');
+    if (modalTitle) {
+        modalTitle.textContent = `${match.team1.name} vs ${match.team2.name}`;
+    }
 
     // If games not initialized, create them
     if (match.games.length === 0) {
@@ -755,42 +1015,46 @@ function openKnockoutScoreModal(matchKey) {
     }
 
     const modalBody = document.getElementById('modal-body');
-    modalBody.innerHTML = match.games.map((game, index) => `
-        <div class="score-input-group">
-            <div class="score-input-header">
-                <h3>Game ${index + 1}</h3>
-            </div>
-            <div class="score-pair">
-                <div class="score-pair-players">
-                    <div>${game.team1Players.join(' & ')}</div>
-                    <div class="score-pair-vs">vs</div>
-                    <div>${game.team2Players.join(' & ')}</div>
+    if (modalBody) {
+        modalBody.innerHTML = match.games.map((game, index) => `
+            <div class="score-input-group">
+                <div class="score-input-header">
+                    <h3>Game ${index + 1}</h3>
                 </div>
-                <div class="score-inputs">
-                    <input type="number"
-                           class="score-input"
-                           id="game-${index}-score1"
-                           min="0"
-                           max="30"
-                           value="${game.team1Score !== null ? game.team1Score : ''}"
-                           placeholder="0">
-                    <span class="score-separator">-</span>
-                    <input type="number"
-                           class="score-input"
-                           id="game-${index}-score2"
-                           min="0"
-                           max="30"
-                           value="${game.team2Score !== null ? game.team2Score : ''}"
-                           placeholder="0">
+                <div class="score-pair">
+                    <div class="score-pair-players">
+                        <div>${game.team1Players.join(' & ')}</div>
+                        <div class="score-pair-vs">vs</div>
+                        <div>${game.team2Players.join(' & ')}</div>
+                    </div>
+                    <div class="score-inputs">
+                        <input type="number"
+                               class="score-input"
+                               id="game-${index}-score1"
+                               min="0"
+                               max="30"
+                               value="${game.team1Score !== null ? game.team1Score : ''}"
+                               placeholder="0">
+                        <span class="score-separator">-</span>
+                        <input type="number"
+                               class="score-input"
+                               id="game-${index}-score2"
+                               min="0"
+                               max="30"
+                               value="${game.team2Score !== null ? game.team2Score : ''}"
+                               placeholder="0">
+                    </div>
                 </div>
             </div>
-        </div>
-    `).join('');
+        `).join('');
+    }
 
     scoreModal.classList.add('active');
 }
 
-function initializeKnockoutGames(match) {
+function initializeKnockoutGames(match: KnockoutMatch): void {
+    if (!match.team1 || !match.team2) return;
+
     const pairings = [
         { team1Pair: [0, 1], team2Pair: [0, 1] },
         { team1Pair: [0, 2], team2Pair: [0, 2] },
@@ -799,21 +1063,21 @@ function initializeKnockoutGames(match) {
 
     match.games = pairings.map((pairing, gameIndex) => ({
         id: gameIndex,
-        team1Players: pairing.team1Pair.map(p => match.team1.players[p]),
-        team2Players: pairing.team2Pair.map(p => match.team2.players[p]),
+        team1Players: pairing.team1Pair.map(p => match.team1!.players[p]),
+        team2Players: pairing.team2Pair.map(p => match.team2!.players[p]),
         team1Score: null,
         team2Score: null,
         winner: null
     }));
 }
 
-function closeModal() {
+function closeModal(): void {
     scoreModal.classList.remove('active');
     currentEditMatch = null;
     currentEditType = null;
 }
 
-async function saveScore() {
+async function saveScore(): Promise<void> {
     if (!currentEditMatch) return;
 
     let allGamesScored = true;
@@ -821,8 +1085,8 @@ async function saveScore() {
     let team2Wins = 0;
 
     currentEditMatch.games.forEach((game, index) => {
-        const score1Input = document.getElementById(`game-${index}-score1`);
-        const score2Input = document.getElementById(`game-${index}-score2`);
+        const score1Input = document.getElementById(`game-${index}-score1`) as HTMLInputElement;
+        const score2Input = document.getElementById(`game-${index}-score2`) as HTMLInputElement;
 
         const score1 = score1Input.value !== '' ? parseInt(score1Input.value) : null;
         const score2 = score2Input.value !== '' ? parseInt(score2Input.value) : null;
@@ -854,26 +1118,30 @@ async function saveScore() {
 
     if (allGamesScored) {
         if (team1Wins > team2Wins) {
-            currentEditMatch.winner = currentEditType === 'group'
-                ? currentEditMatch.team1Id
-                : currentEditMatch.team1.id;
+            if (currentEditType === 'group') {
+                currentEditMatch.winner = (currentEditMatch as Match).team1Id;
+            } else {
+                currentEditMatch.winner = (currentEditMatch as KnockoutMatch).team1!.id;
+            }
         } else if (team2Wins > team1Wins) {
-            currentEditMatch.winner = currentEditType === 'group'
-                ? currentEditMatch.team2Id
-                : currentEditMatch.team2.id;
+            if (currentEditType === 'group') {
+                currentEditMatch.winner = (currentEditMatch as Match).team2Id;
+            } else {
+                currentEditMatch.winner = (currentEditMatch as KnockoutMatch).team2!.id;
+            }
         }
     }
 
     try {
         if (currentEditType === 'group') {
-            await updateMatchOnServer(currentEditMatch.id, currentEditMatch);
+            await updateMatchOnServer(currentEditMatch.id, currentEditMatch as Match);
         } else {
             // Update knockout progression before saving
             updateKnockoutProgression();
             await saveTournament();
         }
         showToast('Score saved!', 'success');
-    } catch (err) {
+    } catch {
         showToast('Failed to save score', 'error');
     }
 
@@ -883,16 +1151,17 @@ async function saveScore() {
 // ========================================
 // Standings
 // ========================================
-function renderStandings() {
+function renderStandings(): void {
     renderPoolStandings('A', 'standings-a');
     renderPoolStandings('B', 'standings-b');
 }
 
-function renderPoolStandings(pool, tableId) {
-    const teams = state.teams[pool];
+function renderPoolStandings(pool: 'A' | 'B', tableId: string): void {
     const standings = calculateStandings(pool);
 
     const tbody = document.querySelector(`#${tableId} tbody`);
+    if (!tbody) return;
+
     tbody.innerHTML = standings.map((team, index) => `
         <tr>
             <td><span class="position-badge position-${index + 1}">${index + 1}</span></td>
@@ -907,11 +1176,11 @@ function renderPoolStandings(pool, tableId) {
     `).join('');
 }
 
-function calculateStandings(pool) {
+function calculateStandings(pool: 'A' | 'B'): Standing[] {
     const teams = state.teams[pool];
     const poolMatches = state.matches.filter(m => m.pool === pool);
 
-    const standings = teams.map(team => ({
+    const standings: Standing[] = teams.map(team => ({
         id: team.id,
         name: team.name,
         played: 0,
@@ -967,7 +1236,7 @@ function calculateStandings(pool) {
 // ========================================
 // Knockout Stage
 // ========================================
-function renderKnockout() {
+function renderKnockout(): void {
     updateKnockoutTeams();
 
     const { semi1, semi2, final: finalMatch } = state.knockoutMatches;
@@ -982,19 +1251,22 @@ function renderKnockout() {
     renderBracketMatch('final', finalMatch);
 
     // Show champion if final is complete
-    if (finalMatch && finalMatch.completed && finalMatch.winner) {
-        const champion = finalMatch.winner === finalMatch.team1.id
-            ? finalMatch.team1.name
-            : finalMatch.team2.name;
+    const championDisplay = document.getElementById('champion-display');
+    const championName = document.getElementById('champion-name');
 
-        document.getElementById('champion-name').textContent = champion;
-        document.getElementById('champion-display').style.display = 'block';
-    } else {
-        document.getElementById('champion-display').style.display = 'none';
+    if (finalMatch && finalMatch.completed && finalMatch.winner && championDisplay && championName) {
+        const champion = finalMatch.winner === finalMatch.team1!.id
+            ? finalMatch.team1!.name
+            : finalMatch.team2!.name;
+
+        championName.textContent = champion;
+        championDisplay.style.display = 'block';
+    } else if (championDisplay) {
+        championDisplay.style.display = 'none';
     }
 }
 
-function renderBracketMatch(matchKey, match) {
+function renderBracketMatch(matchKey: string, match: KnockoutMatch | null): void {
     const element = document.getElementById(matchKey);
     if (!element || !match) return;
 
@@ -1024,19 +1296,19 @@ function renderBracketMatch(matchKey, match) {
     element.onclick = () => openKnockoutScoreModal(matchKey);
 }
 
-function updateKnockoutTeams() {
+function updateKnockoutTeams(): void {
     if (!state.scheduleGenerated) return;
 
     const standingsA = calculateStandings('A');
     const standingsB = calculateStandings('B');
 
     // Get team data
-    const getTeamData = (pool, position) => {
+    const getTeamData = (pool: 'A' | 'B', position: number): Team | null => {
         const standings = pool === 'A' ? standingsA : standingsB;
         if (standings[position - 1]) {
             const teamId = standings[position - 1].id;
             const poolData = state.teams[pool];
-            return poolData.find(t => t.id === teamId);
+            return poolData.find(t => t.id === teamId) || null;
         }
         return null;
     };
@@ -1058,16 +1330,18 @@ function updateKnockoutTeams() {
     }
 }
 
-function updateKnockoutProgression() {
+function updateKnockoutProgression(): void {
     const { semi1, semi2, final: finalMatch } = state.knockoutMatches;
+
+    if (!finalMatch) return;
 
     // Update final teams based on semifinal winners
     if (semi1 && semi1.completed && semi1.winner) {
-        finalMatch.team1 = semi1.winner === semi1.team1.id ? semi1.team1 : semi1.team2;
+        finalMatch.team1 = semi1.winner === semi1.team1!.id ? semi1.team1 : semi1.team2;
     }
 
     if (semi2 && semi2.completed && semi2.winner) {
-        finalMatch.team2 = semi2.winner === semi2.team1.id ? semi2.team1 : semi2.team2;
+        finalMatch.team2 = semi2.winner === semi2.team1!.id ? semi2.team1 : semi2.team2;
     }
 
     // Reset final games if teams change
@@ -1079,7 +1353,7 @@ function updateKnockoutProgression() {
 // ========================================
 // Reset Tournament
 // ========================================
-async function resetTournament() {
+async function resetTournament(): Promise<void> {
     if (!confirm('Are you sure you want to reset the tournament? All data will be lost.')) {
         return;
     }
@@ -1088,14 +1362,14 @@ async function resetTournament() {
         await resetTournamentOnServer();
         showToast('Tournament reset successfully', 'success');
         showSection('setup');
-    } catch (err) {
+    } catch {
         showToast('Failed to reset tournament', 'error');
     }
 }
 
 // Make functions globally available for onclick handlers
-window.openScoreModal = openScoreModal;
-window.openKnockoutScoreModal = openKnockoutScoreModal;
+(window as unknown as { openScoreModal: typeof openScoreModal }).openScoreModal = openScoreModal;
+(window as unknown as { openKnockoutScoreModal: typeof openKnockoutScoreModal }).openKnockoutScoreModal = openKnockoutScoreModal;
 
 // Initialize on DOM ready
 document.addEventListener('DOMContentLoaded', init);

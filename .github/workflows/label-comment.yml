@@ -1,0 +1,22 @@
+name: Comment on PR Label
+on:
+  pull_request_target:
+    types: [labeled]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  add-comment:
+    if: github.event.label.name == 'needs-review'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add comment
+        run: gh pr comment "$NUMBER" --body "$BODY"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.pull_request.number }}
+          BODY: |
+            Thanks for adding the review label! 
+            A reviewer will be assigned soon.
