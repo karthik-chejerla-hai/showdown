@@ -18,7 +18,8 @@
     "express-session": "^1.17.3",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
-    "socket.io": "^4.7.2"
+    "socket.io": "^4.7.2",
+    "typescript": "^5.9.3"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
@@ -27,7 +28,6 @@
     "@types/passport": "^1.0.17",
     "@types/passport-google-oauth20": "^2.0.17",
     "eslint": "^9.17.0",
-    "typescript": "^5.9.3",
     "typescript-eslint": "^8.19.0"
   }
 }
