@@ -1,7 +1,8 @@
-const Database = require('better-sqlite3');
-const path = require('path');
+import Database from 'better-sqlite3';
+import path from 'path';
+import { TournamentState, Match, KnockoutMatch } from './types';
 
-const dbPath = path.join(__dirname, 'tournament.db');
+const dbPath = path.join(__dirname, '..', 'tournament.db');
 const db = new Database(dbPath);
 
 // Initialize database schema
@@ -14,7 +15,7 @@ db.exec(`
 `);
 
 // Default tournament state (matches the frontend structure)
-const defaultState = {
+export const defaultState: TournamentState = {
     teams: {
         A: [
             { id: 'A1', name: 'Team 1', players: ['', '', ''] },
@@ -36,19 +37,27 @@ const defaultState = {
     scheduleGenerated: false
 };
 
+interface TournamentRow {
+    state: string;
+}
+
+interface IdRow {
+    id: number;
+}
+
 // Get tournament state
-function getTournament() {
-    const row = db.prepare('SELECT state FROM tournament WHERE id = 1').get();
+export function getTournament(): TournamentState {
+    const row = db.prepare('SELECT state FROM tournament WHERE id = 1').get() as TournamentRow | undefined;
     if (row) {
-        return JSON.parse(row.state);
+        return JSON.parse(row.state) as TournamentState;
     }
     return defaultState;
 }
 
 // Save tournament state
-function saveTournament(state) {
+export function saveTournament(state: TournamentState): TournamentState {
     const stateJson = JSON.stringify(state);
-    const existing = db.prepare('SELECT id FROM tournament WHERE id = 1').get();
+    const existing = db.prepare('SELECT id FROM tournament WHERE id = 1').get() as IdRow | undefined;
 
     if (existing) {
         db.prepare(`
@@ -66,13 +75,13 @@ function saveTournament(state) {
 }
 
 // Reset tournament to default state
-function resetTournament() {
+export function resetTournament(): TournamentState {
     db.prepare('DELETE FROM tournament WHERE id = 1').run();
     return defaultState;
 }
 
 // Update a specific group match
-function updateMatch(matchId, matchData) {
+export function updateMatch(matchId: string, matchData: Partial<Match>): TournamentState {
     const state = getTournament();
     const matchIndex = state.matches.findIndex(m => m.id === matchId);
 
@@ -85,22 +94,13 @@ function updateMatch(matchId, matchData) {
 }
 
 // Update a knockout match
-function updateKnockoutMatch(matchKey, matchData) {
+export function updateKnockoutMatch(matchKey: keyof TournamentState['knockoutMatches'], matchData: Partial<KnockoutMatch>): TournamentState {
     const state = getTournament();
 
     if (!state.knockoutMatches[matchKey]) {
         throw new Error(`Knockout match ${matchKey} not found`);
     }
 
-    state.knockoutMatches[matchKey] = { ...state.knockoutMatches[matchKey], ...matchData };
+    state.knockoutMatches[matchKey] = { ...state.knockoutMatches[matchKey]!, ...matchData };
     return saveTournament(state);
 }
-
-module.exports = {
-    getTournament,
-    saveTournament,
-    resetTournament,
-    updateMatch,
-    updateKnockoutMatch,
-    defaultState
-};

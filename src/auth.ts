@@ -1,5 +1,19 @@
-const passport = require('passport');
-const GoogleStrategy = require('passport-google-oauth20').Strategy;
+import passport from 'passport';
+import { Strategy as GoogleStrategy, Profile } from 'passport-google-oauth20';
+import { Request, Response, NextFunction } from 'express';
+import { User } from './types';
+
+// Extend Express Request to include user
+declare global {
+    namespace Express {
+        interface User {
+            id: string;
+            name: string;
+            email?: string;
+            photo?: string;
+        }
+    }
+}
 
 // Only configure Google strategy if credentials are provided
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
@@ -7,9 +21,9 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
         clientID: process.env.GOOGLE_CLIENT_ID,
         clientSecret: process.env.GOOGLE_CLIENT_SECRET,
         callbackURL: '/auth/google/callback'
-    }, (accessToken, refreshToken, profile, done) => {
+    }, (accessToken: string, refreshToken: string, profile: Profile, done) => {
         // Return user profile (no database needed for simple auth)
-        const user = {
+        const user: User = {
             id: profile.id,
             name: profile.displayName,
             email: profile.emails?.[0]?.value,
@@ -25,12 +39,12 @@ passport.serializeUser((user, done) => {
 });
 
 // Deserialize user from session
-passport.deserializeUser((user, done) => {
+passport.deserializeUser((user: Express.User, done) => {
     done(null, user);
 });
 
 // Middleware to check if user is authenticated
-function requireAuth(req, res, next) {
+export function requireAuth(req: Request, res: Response, next: NextFunction): void {
     if (req.isAuthenticated()) {
         return next();
     }
@@ -38,8 +52,8 @@ function requireAuth(req, res, next) {
 }
 
 // Check if auth is configured
-function isAuthConfigured() {
+export function isAuthConfigured(): boolean {
     return !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
 }
 
-module.exports = { passport, requireAuth, isAuthConfigured };
+export { passport };

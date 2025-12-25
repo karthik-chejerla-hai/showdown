@@ -1,13 +1,14 @@
-const express = require('express');
-const { createServer } = require('http');
-const { Server } = require('socket.io');
-const { parse } = require('csv-parse/sync');
-const fs = require('fs');
-const path = require('path');
-const session = require('express-session');
+import express, { Request, Response, NextFunction } from 'express';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
+import { parse } from 'csv-parse/sync';
+import fs from 'fs';
+import path from 'path';
+import session from 'express-session';
 
-const db = require('./db');
-const { passport, requireAuth, isAuthConfigured } = require('./auth');
+import * as db from './db';
+import { passport, requireAuth, isAuthConfigured } from './auth';
+import { TournamentState } from './types';
 
 const app = express();
 const httpServer = createServer(app);
@@ -33,27 +34,29 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-app.use(express.static(__dirname));
+// Serve static files from public directory and root
+app.use(express.static(path.join(__dirname, '..', 'public')));
+app.use(express.static(path.join(__dirname, '..')));
 
 // Load players from CSV
-function loadPlayers() {
-    const csvPath = path.join(__dirname, 'players.csv');
+function loadPlayers(): string[] {
+    const csvPath = path.join(__dirname, '..', 'players.csv');
     const fileContent = fs.readFileSync(csvPath, 'utf-8');
     const records = parse(fileContent, {
         skip_empty_lines: true,
         trim: true
-    });
+    }) as string[][];
     // CSV has single column with player names
     return records.map(row => row[0]).filter(name => name && name.trim());
 }
 
 // Cache players list
-let players = [];
+let players: string[] = [];
 try {
     players = loadPlayers();
     console.log(`Loaded ${players.length} players from CSV`);
 } catch (err) {
-    console.error('Error loading players.csv:', err.message);
+    console.error('Error loading players.csv:', (err as Error).message);
 }
 
 // ========================================
@@ -61,7 +64,7 @@ try {
 // ========================================
 
 // Get all players
-app.get('/api/players', (req, res) => {
+app.get('/api/players', (req: Request, res: Response) => {
     res.json(players);
 });
 
@@ -70,38 +73,40 @@ app.get('/api/players', (req, res) => {
 // ========================================
 
 // Check if auth is configured
-app.get('/auth/status', (req, res) => {
+app.get('/auth/status', (req: Request, res: Response) => {
     res.json({ configured: isAuthConfigured() });
 });
 
 // Get current user
-app.get('/auth/user', (req, res) => {
+app.get('/auth/user', (req: Request, res: Response) => {
     res.json(req.user || null);
 });
 
 // Google OAuth login
-app.get('/auth/google', (req, res, next) => {
+app.get('/auth/google', (req: Request, res: Response, next: NextFunction) => {
     if (!isAuthConfigured()) {
-        return res.status(503).json({ error: 'Google OAuth is not configured' });
+        res.status(503).json({ error: 'Google OAuth is not configured' });
+        return;
     }
     passport.authenticate('google', { scope: ['profile', 'email'] })(req, res, next);
 });
 
 // Google OAuth callback
 app.get('/auth/google/callback',
-    (req, res, next) => {
+    (req: Request, res: Response, next: NextFunction) => {
         if (!isAuthConfigured()) {
-            return res.redirect('/');
+            res.redirect('/');
+            return;
         }
         passport.authenticate('google', { failureRedirect: '/' })(req, res, next);
     },
-    (req, res) => {
+    (req: Request, res: Response) => {
         res.redirect('/');
     }
 );
 
 // Logout
-app.get('/auth/logout', (req, res) => {
+app.get('/auth/logout', (req: Request, res: Response) => {
     req.logout((err) => {
         if (err) {
             console.error('Logout error:', err);
@@ -111,7 +116,7 @@ app.get('/auth/logout', (req, res) => {
 });
 
 // Middleware: require auth only if auth is configured
-function requireAuthIfConfigured(req, res, next) {
+function requireAuthIfConfigured(req: Request, res: Response, next: NextFunction): void {
     if (!isAuthConfigured()) {
         return next(); // No auth configured, allow all
     }
@@ -123,29 +128,29 @@ function requireAuthIfConfigured(req, res, next) {
 // ========================================
 
 // Get tournament state
-app.get('/api/tournament', (req, res) => {
+app.get('/api/tournament', (req: Request, res: Response) => {
     try {
         const state = db.getTournament();
         res.json(state);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: (err as Error).message });
     }
 });
 
 // Create/Update tournament (teams, generate schedule) - PROTECTED
-app.post('/api/tournament', requireAuthIfConfigured, (req, res) => {
+app.post('/api/tournament', requireAuthIfConfigured, (req: Request, res: Response) => {
     try {
-        const state = db.saveTournament(req.body);
+        const state = db.saveTournament(req.body as TournamentState);
         // Broadcast to all connected clients
         io.emit('tournament:updated', state);
         res.json(state);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: (err as Error).message });
     }
 });
 
 // Update a group match score - PROTECTED
-app.put('/api/match/:id', requireAuthIfConfigured, (req, res) => {
+app.put('/api/match/:id', requireAuthIfConfigured, (req: Request, res: Response) => {
     try {
         const matchId = req.params.id;
         const state = db.updateMatch(matchId, req.body);
@@ -153,32 +158,32 @@ app.put('/api/match/:id', requireAuthIfConfigured, (req, res) => {
         io.emit('tournament:updated', state);
         res.json(state);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: (err as Error).message });
     }
 });
 
 // Update a knockout match score - PROTECTED
-app.put('/api/knockout/:key', requireAuthIfConfigured, (req, res) => {
+app.put('/api/knockout/:key', requireAuthIfConfigured, (req: Request, res: Response) => {
     try {
-        const matchKey = req.params.key;
+        const matchKey = req.params.key as keyof TournamentState['knockoutMatches'];
         const state = db.updateKnockoutMatch(matchKey, req.body);
         // Broadcast to all connected clients
         io.emit('tournament:updated', state);
         res.json(state);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: (err as Error).message });
     }
 });
 
 // Reset tournament - PROTECTED
-app.delete('/api/tournament', requireAuthIfConfigured, (req, res) => {
+app.delete('/api/tournament', requireAuthIfConfigured, (req: Request, res: Response) => {
     try {
         const state = db.resetTournament();
         // Broadcast to all connected clients
         io.emit('tournament:updated', state);
         res.json(state);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: (err as Error).message });
     }
 });
 

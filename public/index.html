@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Badminton Showdown 🏸</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Navigation -->
+        <nav class="navbar">
+            <div class="nav-brand">
+                <span class="brand-icon">🏸</span>
+                <span class="brand-text">Showdown</span>
+            </div>
+            <div class="nav-links">
+                <a href="#" class="nav-link active" data-section="setup">Setup</a>
+                <a href="#" class="nav-link" data-section="schedule">Schedule</a>
+                <a href="#" class="nav-link" data-section="standings">Standings</a>
+                <a href="#" class="nav-link" data-section="knockout">Knockout</a>
+            </div>
+            <div class="auth-container" id="auth-container">
+                <!-- Auth UI will be rendered here by JavaScript -->
+            </div>
+            <button class="mobile-menu-btn" aria-label="Menu">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </nav>
+
+        <!-- Mobile Navigation -->
+        <div class="mobile-nav">
+            <a href="#" class="mobile-nav-link active" data-section="setup">
+                <span class="nav-icon">⚙️</span>
+                <span>Setup</span>
+            </a>
+            <a href="#" class="mobile-nav-link" data-section="schedule">
+                <span class="nav-icon">📅</span>
+                <span>Schedule</span>
+            </a>
+            <a href="#" class="mobile-nav-link" data-section="standings">
+                <span class="nav-icon">🏆</span>
+                <span>Standings</span>
+            </a>
+            <a href="#" class="mobile-nav-link" data-section="knockout">
+                <span class="nav-icon">⚔️</span>
+                <span>Knockout</span>
+            </a>
+        </div>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Setup Section -->
+            <section id="setup" class="section active">
+                <div class="section-header">
+                    <h1 class="section-title">Tournament Setup</h1>
+                    <p class="section-subtitle">Register your 6 teams with 3 players each</p>
+                </div>
+
+                <div class="pools-container">
+                    <!-- Pool A -->
+                    <div class="pool-card">
+                        <div class="pool-header pool-a">
+                            <h2>Pool A</h2>
+                        </div>
+                        <div class="teams-list" id="pool-a-teams">
+                            <!-- Team cards will be generated here -->
+                        </div>
+                    </div>
+
+                    <!-- Pool B -->
+                    <div class="pool-card">
+                        <div class="pool-header pool-b">
+                            <h2>Pool B</h2>
+                        </div>
+                        <div class="teams-list" id="pool-b-teams">
+                            <!-- Team cards will be generated here -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="login-hint" id="login-hint" style="display: none;">
+                    <span class="login-hint-icon">🔒</span>
+                    <span>Login with Google to make changes</span>
+                </div>
+
+                <div class="action-buttons">
+                    <button class="btn btn-secondary requires-auth" id="reset-btn">
+                        <span class="btn-icon">🔄</span>
+                        Reset All
+                    </button>
+                    <button class="btn btn-primary requires-auth" id="generate-btn">
+                        <span class="btn-icon">🚀</span>
+                        Generate Schedule
+                    </button>
+                </div>
+            </section>
+
+            <!-- Schedule Section -->
+            <section id="schedule" class="section">
+                <div class="section-header">
+                    <h1 class="section-title">Match Schedule</h1>
+                    <p class="section-subtitle">Group stage matches - 18 games total</p>
+                </div>
+
+                <div class="schedule-tabs">
+                    <button class="schedule-tab active" data-pool="all">All Matches</button>
+                    <button class="schedule-tab" data-pool="A">Pool A</button>
+                    <button class="schedule-tab" data-pool="B">Pool B</button>
+                </div>
+
+                <div class="matches-container" id="matches-container">
+                    <div class="empty-state">
+                        <span class="empty-icon">📋</span>
+                        <p>Generate the schedule from the Setup page first</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Standings Section -->
+            <section id="standings" class="section">
+                <div class="section-header">
+                    <h1 class="section-title">Pool Standings</h1>
+                    <p class="section-subtitle">Current rankings based on match results</p>
+                </div>
+
+                <div class="standings-container">
+                    <div class="standings-card">
+                        <div class="standings-header pool-a">
+                            <h2>Pool A Standings</h2>
+                        </div>
+                        <div class="standings-table-wrapper">
+                            <table class="standings-table" id="standings-a">
+                                <thead>
+                                    <tr>
+                                        <th>Pos</th>
+                                        <th>Team</th>
+                                        <th>P</th>
+                                        <th>W</th>
+                                        <th>L</th>
+                                        <th>GW</th>
+                                        <th>GL</th>
+                                        <th>Pts</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="standings-card">
+                        <div class="standings-header pool-b">
+                            <h2>Pool B Standings</h2>
+                        </div>
+                        <div class="standings-table-wrapper">
+                            <table class="standings-table" id="standings-b">
+                                <thead>
+                                    <tr>
+                                        <th>Pos</th>
+                                        <th>Team</th>
+                                        <th>P</th>
+                                        <th>W</th>
+                                        <th>L</th>
+                                        <th>GW</th>
+                                        <th>GL</th>
+                                        <th>Pts</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Knockout Section -->
+            <section id="knockout" class="section">
+                <div class="section-header">
+                    <h1 class="section-title">Knockout Stage</h1>
+                    <p class="section-subtitle">Semifinals and Finals</p>
+                </div>
+
+                <div class="bracket-container" id="bracket-container">
+                    <div class="bracket-round semifinals">
+                        <h3 class="round-title">Semifinals</h3>
+                        <div class="bracket-matches">
+                            <div class="bracket-match" id="semi1">
+                                <div class="bracket-team top">
+                                    <span class="seed">A1</span>
+                                    <span class="team-name">TBD</span>
+                                    <span class="score">-</span>
+                                </div>
+                                <div class="vs-badge">VS</div>
+                                <div class="bracket-team bottom">
+                                    <span class="seed">B2</span>
+                                    <span class="team-name">TBD</span>
+                                    <span class="score">-</span>
+                                </div>
+                            </div>
+                            <div class="bracket-match" id="semi2">
+                                <div class="bracket-team top">
+                                    <span class="seed">B1</span>
+                                    <span class="team-name">TBD</span>
+                                    <span class="score">-</span>
+                                </div>
+                                <div class="vs-badge">VS</div>
+                                <div class="bracket-team bottom">
+                                    <span class="seed">A2</span>
+                                    <span class="team-name">TBD</span>
+                                    <span class="score">-</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bracket-connector"></div>
+
+                    <div class="bracket-round finals">
+                        <h3 class="round-title">🏆 Final</h3>
+                        <div class="bracket-matches">
+                            <div class="bracket-match final-match" id="final">
+                                <div class="bracket-team top">
+                                    <span class="seed">W1</span>
+                                    <span class="team-name">TBD</span>
+                                    <span class="score">-</span>
+                                </div>
+                                <div class="vs-badge">VS</div>
+                                <div class="bracket-team bottom">
+                                    <span class="seed">W2</span>
+                                    <span class="team-name">TBD</span>
+                                    <span class="score">-</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="champion-display" id="champion-display" style="display: none;">
+                    <div class="champion-trophy">🏆</div>
+                    <h2 class="champion-title">Champion</h2>
+                    <p class="champion-name" id="champion-name"></p>
+                </div>
+            </section>
+        </main>
+
+        <!-- Score Modal -->
+        <div class="modal-overlay" id="score-modal">
+            <div class="modal">
+                <div class="modal-header">
+                    <h2 id="modal-title">Enter Score</h2>
+                    <button class="modal-close" id="modal-close">&times;</button>
+                </div>
+                <div class="modal-body" id="modal-body">
+                    <!-- Dynamic content -->
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" id="modal-cancel">Cancel</button>
+                    <button class="btn btn-primary" id="modal-save">Save Score</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

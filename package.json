@@ -2,17 +2,29 @@
   "name": "badminton-showdown",
   "version": "1.0.0",
   "description": "Badminton tournament management app with real-time updates",
-  "main": "server.js",
+  "main": "dist/server.js",
   "scripts": {
-    "start": "node server.js"
+    "build": "npm run build:server && npm run build:client",
+    "build:server": "tsc",
+    "build:client": "tsc -p tsconfig.client.json",
+    "start": "node dist/server.js",
+    "dev": "npm run build && npm start"
   },
   "dependencies": {
-    "better-sqlite3": "^9.2.2",
+    "better-sqlite3": "^12.5.0",
     "csv-parse": "^5.5.2",
     "express": "^4.18.2",
     "express-session": "^1.17.3",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
     "socket.io": "^4.7.2"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/express": "^5.0.6",
+    "@types/express-session": "^1.18.2",
+    "@types/passport": "^1.0.17",
+    "@types/passport-google-oauth20": "^2.0.17",
+    "typescript": "^5.9.3"
   }
 }
