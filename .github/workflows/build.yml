@@ -62,3 +62,34 @@ jobs:
 
       - name: Build client
         run: npm run build:client
+
+  deploy-check:
+    name: Deploy Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies and build
+        run: npm ci && npm run build
+
+      - name: Prune dev dependencies
+        run: npm prune --production
+
+      - name: Verify server starts
+        run: |
+          node dist/server.js &
+          SERVER_PID=$!
+          sleep 3
+          if ! kill -0 $SERVER_PID 2>/dev/null; then
+            echo "Server failed to start"
+            exit 1
+          fi
+          kill $SERVER_PID
+          echo "Server started successfully"
